@@ -1,0 +1,100 @@
+# Copyright (c) 2026 Beara.ai
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Frame profile common to every FMCW radar, included by each radar's own
+  binding. It describes the frames the radar delivers, the same way for
+  every vendor, and the driver reports them through
+  radar_fmcw_get_frame_config().
+
+  Every driver reads the profile with RADAR_FMCW_DT_PROFILE_DEFINE()
+  (zephyr/drivers/radar_fmcw.h), which checks at build time that it
+  describes frames the radar can produce. A driver that programs its radar
+  from the profile derives its settings from it; one that programs a fixed
+  configuration, such as a vendor register list, also checks that the
+  configuration produces exactly these frames. Either way a mismatch fails
+  the build, naming the radar and the property.
+
+  Each radar node carries its own profile, so two radars in one build can
+  run different profiles, e.g. on different frequency bands so they don't
+  interfere. There are no defaults: the application chooses the profile,
+  normally in its board overlay.
+
+  Example:
+
+    start-freq-khz = <58000000>;
+    stop-freq-khz = <59200000>;
+    samples-per-chirp = <128>;
+    chirps-per-frame = <32>;
+    sample-rate-hz = <2000000>;
+    chirp-period-ns = <100050>;
+    frame-period-us = <100070>;
+    rx-mask = <0x7>;
+    tx-pattern = <0x1>;
+
+properties:
+  start-freq-khz:
+    type: int
+    required: true
+    description: |
+      RF frequency at the first ADC sample of a chirp, in kHz. With
+      stop-freq-khz this gives the sampled bandwidth, which sets the range
+      resolution (c / 2B).
+
+  stop-freq-khz:
+    type: int
+    required: true
+    description: RF frequency at the last ADC sample of a chirp, in kHz.
+
+  samples-per-chirp:
+    type: int
+    required: true
+    description: ADC samples per chirp. Sets the range FFT length.
+
+  chirps-per-frame:
+    type: int
+    required: true
+    description: |
+      Chirps per frame, counting every chirp of a TX pattern. Sets the
+      Doppler FFT length.
+
+  sample-rate-hz:
+    type: int
+    required: true
+    description: ADC sample rate in Hz.
+
+  chirp-period-ns:
+    type: int
+    required: true
+    description: |
+      Time from the start of one chirp to the start of the next, in ns.
+      Sets the velocity resolution.
+
+  frame-period-us:
+    type: int
+    required: true
+    description: Time from the start of one frame to the start of the next, in us.
+
+  rx-mask:
+    type: int
+    required: true
+    description: |
+      Bit mask of the physical RX antennas that receive, bit 0 being the
+      first antenna in the radar's own antenna description. Frames hold one
+      channel per enabled antenna, in ascending antenna order.
+
+  tx-pattern:
+    type: array
+    required: true
+    description: |
+      Which physical TX antennas transmit on each chirp, as a pattern that
+      repeats chirp after chirp. Each entry is a bit mask of the antennas
+      that transmit together on one chirp, bit 0 being the first antenna in
+      the radar's own antenna description; chirp c uses entry
+      c % (number of entries).
+
+      One entry for a radar that transmits the same way on every chirp,
+      e.g. <0x1>. Time-division MIMO over three antennas, one at a time, is
+      <0x1 0x2 0x4>. At most 8 entries (RADAR_FMCW_MAX_TX_PATTERN), and
+      chirps-per-frame must be a whole number of repeats, so every frame
+      starts at the first entry.

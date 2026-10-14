@@ -1,0 +1,79 @@
+Send the FIFO burst command and read the data in one SPI transfer
+
+Against Infineon sensor-xensiv-bgt60trxx 78099697159a2a736504ef5bd1d33820b21f4e67
+(release-v2.0.0). See VENDORED.md for why. Apply to the upstream files with
+`patch -p1 < 0001-fifo-read-as-one-spi-transfer.patch`.
+
+--- a/xensiv_bgt60trxx.c
++++ b/xensiv_bgt60trxx.c
+@@ -291,42 +291,16 @@
+ {
+     xensiv_bgt60trxx_platform_assert(dev != NULL);
+     xensiv_bgt60trxx_platform_assert(data != NULL);
+-    xensiv_bgt60trxx_platform_assert((num_samples % 2U) == 0U);
+-    xensiv_bgt60trxx_platform_assert((num_samples / 2U) <= dev->type->fifo_size);
+ 
+-    uint32_t gsr0;
+     uint32_t reg_addr = XENSIV_BGT60TRXX_SPI_BURST_MODE_CMD |
+                         (dev->type->fifo_addr << XENSIV_BGT60TRXX_SPI_BURST_MODE_SADR_POS);
+ 
+     reg_addr = xensiv_bgt60trxx_platform_word_reverse(reg_addr);
+ 
+-    /* SPI read burst mode command */
+-    xensiv_bgt60trxx_platform_spi_cs_set(dev->iface, false);
+-
+-    int32_t retval = xensiv_bgt60trxx_platform_spi_transfer(dev->iface,
+-                                                            (uint8_t*)&reg_addr,
+-                                                            (uint8_t*)&gsr0,
+-                                                            XENSIV_BGT60TRXX_SPI_REG_XFER_LEN_BYTES);
+-
+-    if (XENSIV_BGT60TRXX_STATUS_OK == retval)
+-    {
+-        if ((gsr0 & (XENSIV_BGT60TRXX_REG_GSR0_FOU_ERR_MSK |
+-                     XENSIV_BGT60TRXX_REG_GSR0_SPI_BURST_ERR_MSK |
+-                     XENSIV_BGT60TRXX_REG_GSR0_CLK_NUM_ERR_MSK)) == 0U)
+-        {
+-            retval = xensiv_bgt60trxx_platform_spi_fifo_read(dev->iface,
+-                                                             data,
+-                                                             num_samples);
+-        }
+-        else
+-        {
+-            retval = XENSIV_BGT60TRXX_STATUS_GSR0_ERROR;
+-        }
+-    }
+-
+-    xensiv_bgt60trxx_platform_spi_cs_set(dev->iface, true);
+-
+-    return retval;
++    /* Local modification (see VENDORED.md): the platform sends the burst
++     * command and reads the data in one SPI transfer, under one chip select,
++     * and checks GSR0, as chip select can't be held across two transfers. */
++    return xensiv_bgt60trxx_platform_spi_fifo_read(dev->iface, reg_addr, data, num_samples);
+ }
+ 
+ 
+--- a/xensiv_bgt60trxx_platform.h
++++ b/xensiv_bgt60trxx_platform.h
+@@ -86,13 +86,21 @@
+  * It is expected to use SPI read transfers with a word length of 12bits.
+  * It is expected to drive TX high while data is read in from RX.
+  *
++ * Local modification (see VENDORED.md): the burst command is passed in as
++ * reg_addr, and the platform sends it and reads the data in one SPI
++ * transfer, holding chip select low throughout, then checks the GSR0
++ * status the sensor returns with the command.
++ *
+  * @param[in] iface Platform SPI interface object.
++ * @param[in] reg_addr The burst read command, in the byte order it is sent.
+  * @param[in] rx_data The pointer to the buffer to store the received data.
+  * @param[in] len The number of FIFO data elements of 12bits to receive.
+  * @return XENSIV_BGT60TRXX_STATUS_OK if the read is completed without errors,
++ * XENSIV_BGT60TRXX_STATUS_GSR0_ERROR if the GSR0 status reports an error,
+  * otherwise returns XENSIV_BGT60TRXX_STATUS_COM_ERROR.
+  */
+ int32_t xensiv_bgt60trxx_platform_spi_fifo_read(void* iface,
++                                                uint32_t reg_addr,
+                                                 uint16_t* rx_data,
+                                                 uint32_t len);
+ 

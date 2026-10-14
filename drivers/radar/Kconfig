@@ -1,0 +1,26 @@
+# Copyright (c) 2026 Beara.ai
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig RADAR_FMCW
+	bool "Raw-frame FMCW radar drivers"
+	select RTIO
+	select RTIO_SYS_MEM_BLOCKS
+	select RTIO_CONSUME_SEM
+	help
+	  Enable the raw-frame FMCW radar driver API
+	  (zephyr/drivers/radar_fmcw.h). Drivers deliver complete raw ADC
+	  frames through RTIO into the application's memory pool and
+	  describe them with radar_fmcw_get_frame_config().
+
+if RADAR_FMCW
+
+config RADAR_FMCW_INIT_PRIORITY
+	int "FMCW radar init priority"
+	default 90
+	help
+	  FMCW radar device driver initialization priority. Must be after
+	  the drivers for the buses and GPIOs the radar uses.
+
+rsource "bgt60tr13c/Kconfig"
+
+endif # RADAR_FMCW
