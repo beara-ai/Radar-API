@@ -666,25 +666,34 @@ static int bgt60tr13c_start(const struct device *dev)
 		return -EIO;
 	}
 
-	bgt60tr13c_frame_ts_arm(data);
-	/* Nothing queues data->work until the IRQ is re-enabled below. */
-	atomic_set(&data->draining, 1);
-
 	ret = xensiv_bgt60trxx_soft_reset(
 		&data->dev, (xensiv_bgt60trxx_reset_t)(XENSIV_BGT60TRXX_RESET_FIFO |
 							XENSIV_BGT60TRXX_RESET_FSM));
+	if (ret == XENSIV_BGT60TRXX_STATUS_OK) {
+		ret = xensiv_bgt60trxx_start_frame(&data->dev, true);
+	}
+
 	if (ret != XENSIV_BGT60TRXX_STATUS_OK) {
-		(void)gpio_pin_interrupt_configure_dt(&cfg->irq_gpio, GPIO_INT_EDGE_RISING);
+		/* Leave the radar stopped, as stop() does: not draining, IRQ
+		 * off, and frame generation stopped in case a failed write
+		 * started it anyway (best effort, the bus may be down).
+		 */
+		(void)xensiv_bgt60trxx_start_frame(&data->dev, false);
+		bgt60tr13c_drop_cancelled(data);
 		return -EIO;
 	}
 
-	ret = xensiv_bgt60trxx_start_frame(&data->dev, true);
+	bgt60tr13c_frame_ts_arm(data);
+	/* Set only once the radar has started. Nothing queues data->work
+	 * until the IRQ is re-enabled below.
+	 */
+	atomic_set(&data->draining, 1);
 
 	/* Re-enable only now - after this point IRQs driving data->work
 	 * are expected and safe. */
 	(void)gpio_pin_interrupt_configure_dt(&cfg->irq_gpio, GPIO_INT_EDGE_RISING);
 
-	return (ret == XENSIV_BGT60TRXX_STATUS_OK) ? 0 : -EIO;
+	return 0;
 }
 
 static int bgt60tr13c_stop(const struct device *dev)
