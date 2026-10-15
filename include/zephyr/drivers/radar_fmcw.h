@@ -767,14 +767,15 @@ static inline int radar_fmcw_stream(const struct rtio_iodev *iodev, struct rtio 
  * @param frame   Filled in; frame->data points into @p buf.
  *
  * @retval 0       success
- * @retval -EINVAL @p buf is too short for the header or the data it lists
+ * @retval -EINVAL @p buf or @p frame is NULL, or @p buf is too short for
+ *                 the header or the data it lists
  */
 static inline int radar_fmcw_frame_from_buf(const uint8_t *buf, uint32_t buf_len,
 					    struct radar_fmcw_frame *frame)
 {
 	struct radar_fmcw_frame_header hdr;
 
-	if (buf == NULL || buf_len < sizeof(hdr)) {
+	if (buf == NULL || frame == NULL || buf_len < sizeof(hdr)) {
 		return -EINVAL;
 	}
 	memcpy(&hdr, buf, sizeof(hdr));
